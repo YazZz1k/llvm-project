@@ -41,7 +41,7 @@ struct ReplayInlinerSettings;
 /// training.
 ///
 /// - Dynamically load an advisor via a plugin (PluginInlineAdvisorAnalysis)
-enum class InliningAdvisorMode : int { Default, Release, Development };
+enum class InliningAdvisorMode : int { Default, Release, Development, Tuned };
 
 // Each entry represents an inline driver.
 enum class InlinePass : int {
@@ -363,6 +363,10 @@ getReleaseModeAdvisor(Module &M, ModuleAnalysisManager &MAM,
 std::unique_ptr<InlineAdvisor>
 getDevelopmentModeAdvisor(Module &M, ModuleAnalysisManager &MAM,
                           std::function<bool(CallBase &)> GetDefaultAdvice);
+
+std::unique_ptr<InlineAdvisor>
+getTunedModeAdvisor(Module &M, ModuleAnalysisManager &MAM,
+                    std::function<bool(CallBase &)> GetDefaultAdvice);
 
 // Default (manual policy) decision making helper APIs. Shared with the legacy
 // pass manager inliner.

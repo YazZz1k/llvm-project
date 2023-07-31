@@ -137,12 +137,15 @@ using namespace llvm;
 static cl::opt<InliningAdvisorMode> UseInlineAdvisor(
     "enable-ml-inliner", cl::init(InliningAdvisorMode::Default), cl::Hidden,
     cl::desc("Enable ML policy for inliner. Currently trained for -Oz only"),
-    cl::values(clEnumValN(InliningAdvisorMode::Default, "default",
-                          "Heuristics-based inliner version"),
-               clEnumValN(InliningAdvisorMode::Development, "development",
-                          "Use development mode (runtime-loadable model)"),
-               clEnumValN(InliningAdvisorMode::Release, "release",
-                          "Use release mode (AOT-compiled model)")));
+    cl::values(
+        clEnumValN(InliningAdvisorMode::Default, "default",
+                   "Heuristics-based inliner version"),
+        clEnumValN(InliningAdvisorMode::Development, "development",
+                   "Use development mode (runtime-loadable model)"),
+        clEnumValN(InliningAdvisorMode::Release, "release",
+                   "Use release mode (AOT-compiled model)"),
+        clEnumValN(InliningAdvisorMode::Tuned, "tune",
+                   "Use inlining mode to collect inlining configurations")));
 
 static cl::opt<bool> EnableSyntheticCounts(
     "enable-npm-synthetic-counts", cl::Hidden,

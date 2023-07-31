@@ -235,6 +235,9 @@ bool InlineAdvisorAnalysis::Result::tryCreate(
     LLVM_DEBUG(dbgs() << "Using release-mode inliner policy.\n");
     Advisor = llvm::getReleaseModeAdvisor(M, MAM, GetDefaultAdvice);
     break;
+  case InliningAdvisorMode::Tuned:
+    LLVM_DEBUG(dbgs() << "Using collect-mode inliner policy.\n");
+    Advisor = llvm::getTunedModeAdvisor(M, MAM, GetDefaultAdvice);
   }
 
   return !!Advisor;
