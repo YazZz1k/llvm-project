@@ -3,11 +3,12 @@
 
 #include "llvm/Analysis/InlineAdvisor.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
-
 #include <random>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -23,24 +24,58 @@ struct CallBaseDescr {
   CallBaseDescr(const CallBase &CB) {
     CallerName = CB.getCaller()->getName();
     CalleeName = CB.getCalledFunction()->getName();
-    auto &DL = CB.getDebugLoc();
+    DL = CB.getDebugLoc();
     assert(DL);
-    Line = DL.getLine();
-    Col = DL.getCol();
+    DLoc = serializeDL();
+    /*    if (auto* InlinedDL = DL.get()->getInlinedAt()) {
+          auto* Tmp = DL.get()->getRawScope();
+          if (auto* SP = dyn_cast<DISubprogram>(Tmp)) {
+            CallerName = SP->getName();
+          } else if (auto* SC = dyn_cast<DILexicalBlock>(Tmp)) {
+            auto* scope = SC->getScope();
+            CallerName = scope->getSubprogram()->getName();
+          } else if (auto* LBF = dyn_cast<DILexicalBlockFile>(Tmp)) {
+            auto* scope = LBF->getScope();
+            CallerName = scope->getSubprogram()->getName();
+          } else {
+            DL.get()->getRawScope()->dump();
+            exit(1);
+          }
+        } */
   }
 
   CallBaseDescr(const std::string &CallerName, const std::string &CalleeName,
-                unsigned Line, unsigned Col)
-      : CallerName(CallerName), CalleeName(CalleeName), Line(Line), Col(Col) {}
+                const std::string &DLoc)
+      : CallerName(CallerName), CalleeName(CalleeName), DLoc(DLoc) {}
 
   bool operator==(const CallBaseDescr &other) const {
-    return Line == other.Line && Col == other.Col;
+    return CalleeName == other.CalleeName && CallerName == other.CallerName &&
+           DLoc == other.DLoc;
+  }
+
+  std::string serializeDL() const {
+    std::stringstream ss;
+    bool First = true;
+    for (auto *IDL = DL.get(); IDL; IDL = IDL->getInlinedAt()) {
+      if (!First)
+        ss << "@";
+      ss << IDL->getLine() << ":" << IDL->getColumn();
+      First = false;
+    }
+
+    return ss.str();
+  }
+
+  std::string to_string() const {
+    return CallerName + ":" + CalleeName + ":" + serializeDL();
   }
 
   std::string CallerName;
   std::string CalleeName;
-  unsigned Line;
-  unsigned Col;
+  std::string DLoc;
+  // unsigned Line;
+  // unsigned Col;
+  DebugLoc DL;
 };
 
 class StochasticInlineAdvisor : public InlineAdvisor {
@@ -61,9 +96,23 @@ public:
 
   std::unique_ptr<OptimizationRemarkEmitter> ORE = nullptr;
 
+  void removeLastAdvice() { InlineConfig.pop_back(); }
+
 private:
   std::mt19937 MTRand;
   std::vector<std::pair<CallBaseDescr, bool>> InlineConfig;
+};
+
+class TuneInlineAdvice : public InlineAdvice {
+public:
+  TuneInlineAdvice(StochasticInlineAdvisor *Advisor, CallBase &CB,
+                   OptimizationRemarkEmitter &ORE, bool Advice)
+      : InlineAdvice(dyn_cast<InlineAdvisor>(Advisor), CB, ORE, Advice),
+        StochasticAdvisor(Advisor) {}
+
+protected:
+  void recordUnattemptedInliningImpl() override {}
+  StochasticInlineAdvisor *StochasticAdvisor;
 };
 
 class PredefinedInlineAdvisor : public InlineAdvisor {

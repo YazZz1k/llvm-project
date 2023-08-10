@@ -44,18 +44,53 @@ PredefinedInlineAdvisor::getAdviceImpl(CallBase &CB) {
   if (it == InlineConfig.end()) {
     CallBaseDescr CBD(CB);
     errs() << "Cant find the config for edge:\n";
-    errs() << CBD.CallerName << ":" << CBD.CalleeName << ":" << CBD.Line << ":" << CBD.Col << "\n";
+    // errs() << CBD.CallerName << ":" << CBD.CalleeName << ":" << CBD.Line <<
+    // ":" << CBD.Col << "\n";
+    errs() << CBD.CallerName << ":" << CBD.CalleeName << ":" << CBD.DLoc
+           << "\n";
     exit(1);
   }
+  /*
+  auto it2 = std::find_if(it + 1, InlineConfig.end(),
+                         [&CB](const auto &Edge) { return Edge.first == CB; });
+  if (it2 != InlineConfig.end()) {
+    CallBaseDescr CBD(CB);
+    errs() << CBD.CallerName << ":" << CBD.CalleeName << ":" << CBD.Line << ":"
+  << CBD.Col
+           << "\n";
+    CBD = it->first;
+    errs() << CBD.CallerName << ":" << CBD.CalleeName << ":" << CBD.Line << ":"
+  << CBD.Col
+           << "\n";
+    errs() << "advice " << it->second << "\n";
+    CBD = it2->first;
+    errs() << CBD.CallerName << ":" << CBD.CalleeName << ":" << CBD.Line << ":"
+  << CBD.Col
+           << "\n";
+    errs() << "advice " << it2->second << "\n";
+    exit(1);
+  }
+  */
   return std::make_unique<InlineAdvice>(this, CB, *ORE, (*it).second);
 }
 
 std::unique_ptr<InlineAdvice>
 StochasticInlineAdvisor::getAdviceImpl(CallBase &CB) {
+  // stumb
   ORE = std::make_unique<OptimizationRemarkEmitter>(CB.getCaller());
-  bool RandAdvice = std::uniform_int_distribution<>{0, 1}(MTRand);
-  InlineConfig.push_back({CallBaseDescr(CB), RandAdvice});
-  return std::make_unique<InlineAdvice>(this, CB, *ORE, RandAdvice);
+
+  auto it = std::find_if(InlineConfig.begin(), InlineConfig.end(),
+                         [&CB](const auto &Edge) { return Edge.first == CB; });
+
+  bool Advice = false;
+  if (it != InlineConfig.end()) {
+    Advice = it->second;
+  } else {
+    Advice = std::uniform_int_distribution<>{0, 1}(MTRand);
+    InlineConfig.push_back({CallBaseDescr(CB), Advice});
+  }
+
+  return std::make_unique<TuneInlineAdvice>(this, CB, *ORE, Advice);
 }
 
 void StochasticInlineAdvisor::dumpConfig(StringRef OutputFile) {
@@ -78,10 +113,11 @@ void StochasticInlineAdvisor::toJSON(json::OStream &JOS) {
         JOS.object([&]() {
           JOS.attribute("caller", CB.CallerName);
           JOS.attribute("callee", CB.CalleeName);
-          JOS.attributeArray("loc", [&]() {
+          /*JOS.attributeArray("loc", [&]() {
             JOS.value(CB.Line);
             JOS.value(CB.Col);
-          });
+          });*/
+          JOS.attribute("loc", CB.serializeDL());
           JOS.attribute("advice", Advice);
         });
       }
@@ -96,15 +132,17 @@ getEdgeConfigFromJSON(const json::Value &Value) {
   const auto *Obj = Value.getAsObject();
   const auto *caller = Obj->get("caller");
   const auto *callee = Obj->get("callee");
-  const auto loc = *Obj->get("loc")->getAsArray();
+  const auto *loc = Obj->get("loc");
+  // const auto loc = *Obj->get("loc")->getAsArray();
   const auto *advice = Obj->get("advice");
 
   std::string CallerName = (*caller->getAsString()).data();
   std::string CalleeName = (*callee->getAsString()).data();
-  unsigned Line = *(loc[0].getAsUINT64());
-  unsigned Col = *(loc[1].getAsUINT64());
+  // unsigned Line = *(loc[0].getAsUINT64());
+  // unsigned Col = *(loc[1].getAsUINT64());
+  std::string DLoc = (*loc->getAsString()).data();
   bool Advice = *advice->getAsBoolean();
-  return {CallBaseDescr(CallerName, CalleeName, Line, Col), Advice};
+  return {CallBaseDescr(CallerName, CalleeName, DLoc), Advice};
 }
 
 // TODO: add handling the parse errors
